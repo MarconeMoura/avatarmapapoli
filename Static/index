@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mapa Interativo POLI UPE</title>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@500;700;800&display=swap');
+
+* {
+box-sizing: border-box;
+}
+
+:root {
+--ceu-top: #ff7eb6;
+--ceu-bottom: #ffe8f3;
+--painel: #c94887;
+--painel-escuro: #9f2f69;
+--texto-claro: #fff3fa;
+--botao-borda: #f5a8cb;
+--botao-cinza: #f1dce8;
+--botao-cinza-borda: #c799b0;
+--verde-top: #95e95b;
+--verde-bottom: #279f39;
+--verde-borda: #16702c;
+/* Controle de altura do círculo atrás do avatar - DESKTOP */
+--hero-glow-bottom-desktop: 10px;
+--hero-ring-bottom-desktop: 10px;
+/* Controle de altura do círculo atrás do avatar - MOBILE */
+--hero-glow-bottom-mobile: 75px;
+--hero-ring-bottom-mobile: 67px;
+}
+
+body {
+margin: 0;
+min-height: 100vh;
+font-family: "Nunito", "Segoe UI", sans-serif;
+background:
+radial-gradient(circle at 15% 8%, rgba(255, 255, 255, 0.72) 0, rgba(255, 255, 255, 0) 28%),
+radial-gradient(circle at 88% 12%, rgba(255, 255, 255, 0.58) 0, rgba(255, 255, 255, 0) 24%),
+linear-gradient(180deg, var(--ceu-top) 0%, var(--ceu-bottom) 64%);
+display: flex;
+justify-content: center;
+color: #5b1b3f;
+padding: 14px;
+}
+
+.game-shell {
+width: min(920px, 100%);
+min-height: calc(100vh - 28px);
+border-radius: 26px;
+background: linear-gradient(180deg, rgba(255, 209, 231, 0.72), rgba(247, 160, 200, 0.62));
+border: 2px solid rgba(255, 255, 255, 0.68);
+box-shadow: 0 18px 44px rgba(117, 25, 74, 0.35);
+position: relative;
+overflow: hidden;
+display: flex;
+flex-direction: column;
+padding: 16px 16px 14px;
+}
+
+.topbar {
+display: block;
+align-items: center;
+margin-bottom: 8px;
+}
+
+.brand {
+margin: 0;
+text-align: center;
+color: #8d235d;
+font-size: clamp(2rem, 5vw, 3.4rem);
+line-height: 1;
+letter-spacing: 1px;
+font-family: "Baloo 2", "Nunito", sans-serif;
+font-weight: 800;
+text-shadow: 0 2px 0 rgba(255, 255, 255, 0.8);
+}
+
+.map-stage {
+position: relative;
+flex: 0 0 auto;
+min-height: 430px;
+height: clamp(400px, 64vh, 620px);
+border-radius: 22px;
+border: 2px solid #d98ab2;
+background: linear-gradient(180deg, #ffd6eb 0%, #ffeaf6 45%, #ffe3ef 100%);
+overflow: hidden;
+box-shadow: inset 0 0 0 4px rgba(255, 255, 255, 0.4), 0 10px 22px rgba(0, 0, 0, 0.2);
+}
+
+#game-container {
+position: absolute;
+inset: 0;
+}
+
+#map-base {
+position: absolute;
+inset: 0;
+width: 100%;
+height: 100%;
+object-fit: fill;
+z-index: 1;
+pointer-events: none;
+}
+
+#trilhas-svg,
+#rota-svg {
+position: absolute;
+inset: 0;
+width: 100%;
+height: 100%;
+pointer-events: none;
+}
+
+#trilhas-svg {
+z-index: 2;
+}
+
+#rota-svg {
+z-index: 4;
+}
+
+.linha-trilha {
+stroke: rgba(255, 255, 255, 0.2);
+stroke-width: 4;
+stroke-linecap: round;
+}
+
+#rota-polyline {
+fill: none;
+stroke: #ffe168;
+stroke-width: 7;
+stroke-dasharray: 14;
+stroke-linecap: round;
+stroke-linejoin: round;
+opacity: 0;
+transition: opacity 0.2s;
+animation: dashAnim 1s linear infinite;
+filter: drop-shadow(0 0 6px rgba(255, 225, 104, 0.55));
+}
+
+@keyframes dashAnim {
+from {
+stroke-dashoffset: 22;
+}
+to {
+stroke-dashoffset: 0;
+}
+}
+
+#checkpoints-layer {
+position: absolute;
+inset: 0;
+z-index: 6;
+}
+
+.checkpoint {
+position: absolute;
+width: 46px;
+height: 46px;
+transform: translate(-50%, -100%);
+border-radius: 50% 50% 50% 0;
+rotate: -45deg;
+cursor: pointer;
+background: radial-gradient(circle at 35% 35%, #eaf8ff, #93d9ff 62%, #5dbcf2);
+border: 2px solid #2f8dc0;
+box-shadow: 0 8px 18px rgba(0, 0, 0, 0.3);
+transition: transform 0.14s ease;
+display: flex;
+align-items: center;
+justify-content: center;
+animation: checkpointFloat 1.8s ease-in-out infinite;
+}
+
+.checkpoint:hover {
+transform: translate(-50%, -102%) scale(1.08);
+}
+
+.checkpoint span {
+rotate: 45deg;
+color: #0f4f70;
+font-family: "Baloo 2", sans-serif;
+font-size: 0.9rem;
+font-weight: 800;
+margin-top: 2px;
+}
+
+@keyframes checkpointFloat {
+0%,
+100% {
+margin-top: 0;
+}
+50% {
+margin-top: -3px;
+}
+}
+
+#avatar-on-map {
+position: absolute !important;
+width: 74px;
+height: 74px;
+background-image: url('/static/idle1.png');
+background-size: contain;
+background-repeat: no-repeat;
+background-position: center;
+z-index: 8;
+transform: translate(-50%, -50%);
+filter: drop-shadow(0 5px 10px rgba(0, 0, 0, 0.35));
+transition: left 180ms linear, top 180ms linear;
+will-change: left, top;
+}
+
+.route-chip {
+position: relative;
+z-index: 1;
+background: rgba(255, 250, 230, 0.9);
+border: 1px solid rgba(89, 77, 16, 0.34);
+box-shadow: 0 7px 14px rgba(0, 0, 0, 0.22);
+border-radius: 14px;
+padding: 6px 12px;
+font-family: "Baloo 2", sans-serif;
+font-size: 1.05rem;
+font-weight: 700;
+color: #3f3509;
+text-align: center;
+max-width: 100%;
+}
+
+#mascot-container {
+display: grid;
+grid-template-columns: 340px 1fr;
+gap: 14px;
+align-items: stretch;
+pointer-events: auto;
+}
+
+.mascot-card {
+background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(255, 235, 246, 0.94));
+border: 2px solid #d98ab2;
+border-radius: 16px;
+min-height: 320px;
+box-shadow: 0 10px 20px rgba(135, 34, 86, 0.22);
+position: relative;
+overflow: hidden;
+display: flex;
+align-items: center;
+justify-content: center;
+padding: 12px 8px;
+}
+
+.mascot-card::before {
+content: "";
+position: absolute;
+width: 260px;
+height: 260px;
+left: 50%;
+bottom: var(--hero-glow-bottom-desktop);
+transform: translateX(-50%);
+border-radius: 50%;
+background: radial-gradient(circle, rgba(255, 244, 171, 0.95) 0%, rgba(255, 214, 86, 0.55) 40%, rgba(255, 201, 45, 0) 72%);
+filter: blur(1px);
+animation: heroGlow 2.8s ease-in-out infinite;
+z-index: 0;
+}
+
+.mascot-card::after {
+content: "";
+position: absolute;
+width: 282px;
+height: 282px;
+left: 50%;
+bottom: var(--hero-ring-bottom-desktop);
+transform: translateX(-50%);
+border-radius: 50%;
+border: 2px dashed rgba(201, 72, 135, 0.35);
+animation: heroRing 8s linear infinite;
+z-index: 0;
+}
+
+.hero-tag {
+display: none;
+}
+
+#polia-side-shell {
+width: 250px;
+height: 250px;
+display: flex;
+align-items: center;
+justify-content: center;
+z-index: 1;
+}
+
+#polia-side-mascot {
+width: 238px;
+height: 238px;
+object-fit: contain;
+filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.25));
+transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+animation: heroFloat 3s ease-in-out infinite;
+}
+
+@keyframes heroGlow {
+0%,
+100% {
+opacity: 0.78;
+transform: translateX(-50%) scale(1);
+}
+50% {
+opacity: 1;
+transform: translateX(-50%) scale(1.06);
+}
+}
+
+@keyframes heroRing {
+from {
+transform: translateX(-50%) rotate(0deg);
+}
+to {
+transform: translateX(-50%) rotate(360deg);
+}
+}
+
+@keyframes heroFloat {
+0%,
+100% {
+margin-bottom: 0;
+}
+50% {
+margin-bottom: 6px;
+}
+}
+
+.interactive-column {
+display: grid;
+grid-template-rows: auto auto;
+gap: 8px;
+pointer-events: auto;
+}
+
+.control-strip {
+margin-top: 0;
+margin-bottom: 10px;
+display: grid;
+gap: 10px;
+}
+
+#speech-bubble-mascot {
+background: linear-gradient(160deg, #fffdf4, #ffffff);
+border: 2px solid #d98ab2;
+border-radius: 14px;
+color: #6d2850;
+font-size: 0.9rem;
+font-weight: 700;
+line-height: 1.34;
+padding: 10px 12px;
+box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+opacity: 0;
+visibility: hidden;
+transform: translateY(5px) scale(0.99);
+transition: opacity 240ms ease, transform 280ms cubic-bezier(0.22, 1, 0.36, 1), visibility 0s linear 240ms;
+}
+
+#speech-bubble-mascot.is-visible {
+opacity: 1;
+visibility: visible;
+transform: translateY(0) scale(1);
+transition: opacity 240ms ease, transform 280ms cubic-bezier(0.22, 1, 0.36, 1), visibility 0s linear 0s;
+}
+
+.hero-search-card {
+background: var(--painel);
+border: 2px solid #84c7ff;
+border-radius: 14px;
+padding: 10px;
+color: var(--texto-claro);
+box-shadow: 0 10px 16px rgba(14, 49, 82, 0.35);
+}
+
+.hero-search-card strong {
+display: block;
+margin-bottom: 8px;
+font-size: 1rem;
+line-height: 1.2;
+}
+
+.search-row {
+display: grid;
+grid-template-columns: 1fr auto;
+gap: 8px;
+}
+
+.hero-search-card input {
+min-width: 0;
+height: 44px;
+border-radius: 11px;
+border: 2px solid #adcff1;
+padding: 0 11px;
+font-size: 0.95rem;
+font-family: "Nunito", sans-serif;
+outline: none;
+}
+
+.hero-search-card input:focus {
+border-color: #ffe58c;
+box-shadow: 0 0 0 3px rgba(255, 229, 140, 0.26);
+}
+
+.hero-search-card button {
+height: 44px;
+border-radius: 11px;
+border: 2px solid var(--verde-borda);
+background: linear-gradient(180deg, var(--verde-top), var(--verde-bottom));
+color: #13361b;
+padding: 0 14px;
+font-size: 1.02rem;
+font-family: "Baloo 2", sans-serif;
+font-weight: 800;
+cursor: pointer;
+transition: transform 0.13s ease;
+}
+
+.hero-search-card button:hover {
+transform: translateY(-1px) scale(1.01);
+}
+
+.details-strip {
+margin-top: 10px;
+background: rgba(255, 255, 255, 0.86);
+border-radius: 13px;
+border: 1px solid rgba(38, 92, 146, 0.35);
+padding: 9px 11px;
+display: grid;
+gap: 4px;
+box-shadow: 0 6px 12px rgba(20, 72, 114, 0.16);
+}
+
+#titulo-bloco {
+margin: 0;
+font-family: "Baloo 2", sans-serif;
+color: #1d4f84;
+font-size: 1.05rem;
+}
+
+#salas-bloco {
+color: #285f93;
+font-size: 0.9rem;
+line-height: 1.3;
+max-height: 88px;
+overflow: auto;
+}
+
+@media (max-width: 820px) {
+body {
+padding: 8px;
+}
+
+.game-shell {
+min-height: calc(100vh - 16px);
+border-radius: 16px;
+padding: 10px;
+}
+
+.topbar {
+margin-bottom: 6px;
+}
+
+.map-stage {
+min-height: 420px;
+}
+
+#mascot-container {
+grid-template-columns: 1fr;
+gap: 7px;
+}
+
+.mascot-card {
+min-height: 170px;
+}
+
+#polia-side-shell {
+width: 170px;
+height: 170px;
+}
+
+#polia-side-mascot {
+width: 150px;
+height: 150px;
+}
+
+.mascot-card::before {
+width: 160px;
+height: 160px;
+bottom: var(--hero-glow-bottom-mobile);
+}
+
+.mascot-card::after {
+width: 176px;
+height: 176px;
+bottom: var(--hero-ring-bottom-mobile);
+}
+
+.hero-search-card strong {
+font-size: 0.94rem;
+}
+
+.search-row {
+grid-template-columns: 1fr;
+}
+
+}
+</style>
+</head>
+<body>
+<div class="game-shell">
+<header class="topbar">
+<h1 class="brand">UPE</h1>
+</header>
+
+<section class="control-strip">
+<div id="mascot-container">
+<div class="mascot-card">
+<div id="polia-side-shell">
+<img id="polia-side-mascot" src="/static/idle1.png" alt="Mascote Polia" />
+</div>
+</div>
+
+<div class="interactive-column">
+<div id="speech-bubble-mascot">Bem-vindo à POLI! Sou a Polia.</div>
+
+<div class="hero-search-card">
+<strong>Buscar sala ou bloco</strong>
+<div class="search-row">
+<input type="text" id="input-pergunta" placeholder="Ex: K06, B01, Biblioteca" />
+<button id="btn-buscar" type="button">BUSCAR</button>
+</div>
+<div class="details-strip">
+<h2 id="titulo-bloco">INFO: ENTRADA</h2>
+<div id="salas-bloco">Clique num bloco para ver as salas.</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+
+<main class="map-stage">
+<div id="game-container">
+<img id="map-base" src="/static/mapa_poli_base.png" alt="Mapa do campus" />
+<svg id="trilhas-svg"></svg>
+<svg id="rota-svg">
+<polyline id="rota-polyline" points=""></polyline>
+</svg>
+<div id="checkpoints-layer"></div>
+<div id="avatar-on-map" style="left: 32%; top: 80%;"></div>
+</div>
+</main>
+</div>
+
+<script>
+const TEMPO_POR_TRECHO = 1400;
+const INTERVALO_PASSOS = 420;
+const ATIVAR_MOVIMENTO_CONTINUO = false;
+const USAR_TTS_API = false;
+const USAR_VOZ_PADRAO_DO_SISTEMA = true;
+// --- CONFIGURAÇÃO DE VOZ FEMININA / INFANTIL ---
+const VELOCIDADE_VOZ = 0.7; // Pausadamente (mais lenta)
+const PITCH_VOZ = 2.5; // Bem mais alto = som muito feminino e alegre
+const VOZ_PREFERIDA = 'Luciana';
+const VOZ_ALTERNATIVAS = ['Luciana', 'Fernanda', 'Joana', 'Google português do Brasil'];
+const INTERVALO_IDLE_MIN = 900;
+const INTERVALO_IDLE_MAX = 1900;
+const BLINK_MIN = 2200;
+const BLINK_MAX = 5200;
+const avatarOnMap = document.getElementById('avatar-on-map');
+const speechBubbleMascot = document.getElementById('speech-bubble-mascot');
+const inputPergunta = document.getElementById('input-pergunta');
+const btnBuscar = document.getElementById('btn-buscar');
+const tituloBloco = document.getElementById('titulo-bloco');
+const salasBloco = document.getElementById('salas-bloco');
+const poliaSideMascot = document.getElementById('polia-side-mascot');
+const checkpointsLayer = document.getElementById('checkpoints-layer');
+const trilhasSvg = document.getElementById('trilhas-svg');
+const rotaPolyline = document.getElementById('rota-polyline');
+let vozPolia = null;
+let poliaJaSeApresentou = false;
+let audioPoliaAtual = null;
+let audioPoliaUrlAtual = null;
+let falaTokenAtual = 0;
+
+const poseAjustes = {
+'idle1.png': { scale: 1.0, x: 0, y: 0 },
+'think1.png': { scale: 0.97, x: -2, y: 2 },
+'talk1.png': { scale: 0.98, x: 0, y: 1 },
+'talk2.png': { scale: 0.98, x: 0, y: 1 },
+'talk3.png': { scale: 0.98, x: 0, y: 1 },
+'gesticular2.png': { scale: 1.12, x: 1, y: 0 }
+};
+
+function setMascotPose(frame) {
+const ajuste = poseAjustes[frame] || { scale: 1.0, x: 0, y: 0 };
+basePose = ajuste;
+poliaSideMascot.src = `/static/${frame}`;
+aplicarTransformMascote();
+}
+
+let locaisCache = {};
+let localAtual = 'entrada';
+let walkInterval, talkTimeout, idleTimeout, blinkTimeout;
+let basePose = { scale: 1, x: 0, y: 0 }, microMovimento = { x: 0, y: 0, rot: 0, blinkY: 1 };
+
+const conexoes = {
+"entrada": ["estacionamento", "bloco b"], "estacionamento": ["entrada", "bloco a"], "lanchonete": ["bloco a", "bloco i/k"], "bloco a": ["estacionamento", "lanchonete", "bloco h"], "bloco h": ["bloco a", "bloco g", "bloco b", "bloco i/k"], "bloco g": ["bloco h", "bloco f", "bloco b", "bloco i/k"], "bloco f": ["bloco g", "da", "bloco b", "bloco e"], "bloco b": ["entrada", "bloco h", "bloco g", "bloco f", "da"], "da": ["bloco b", "bloco f", "bloco j"], "bloco i/k": ["lanchonete", "bloco e", "bloco h", "bloco g"], "bloco e": ["bloco i/k", "bloco d", "bloco f"], "bloco d": ["bloco e", "bloco j"], "bloco j": ["da", "bloco d", "bloco c"], "bloco c": ["bloco j"]
+};
+
+function formatarNomeLocal(id) { return id.replace(/\b\w/g, l => l.toUpperCase()); }
+function abreviarLocal(id) {
+const m = { "entrada": "IN", "estacionamento": "EST", "lanchonete": "LAN", "bloco a": "A", "bloco h": "H", "bloco g": "G", "bloco f": "F", "bloco b": "B", "da": "DA", "bloco i/k": "I/K", "bloco e": "E", "bloco d": "D", "bloco j": "J", "bloco c": "C" };
+return m[id] || id.slice(0, 3).toUpperCase();
+}
+
+function percentualParaPixel(x, y) {
+const rect = document.getElementById('game-container').getBoundingClientRect();
+return { x: (x / 100) * rect.width, y: (y / 100) * rect.height };
+}
+
+function aplicarTransformMascote() {
+poliaSideMascot.style.transform = `translate(${basePose.x + microMovimento.x}px, ${basePose.y + microMovimento.y}px) rotate(${microMovimento.rot}deg) scale(${basePose.scale}) scaleY(${microMovimento.blinkY})`;
+}
+
+function atualizarBalao(texto) {
+speechBubbleMascot.classList.remove('is-visible');
+void speechBubbleMascot.offsetWidth;
+speechBubbleMascot.innerText = texto;
+speechBubbleMascot.classList.add('is-visible');
+}
+
+function iniciarIdleProcedural() {
+if (!ATIVAR_MOVIMENTO_CONTINUO) {
+microMovimento.x = 0;
+microMovimento.y = 0;
+microMovimento.rot = 0;
+aplicarTransformMascote();
+return;
+}
+const atualizar = () => {
+microMovimento.x = (Math.random() - 0.5) * 0.4;
+microMovimento.y = (Math.random() - 0.5) * 0.35;
+microMovimento.rot = (Math.random() - 0.5) * 0.3;
+aplicarTransformMascote();
+idleTimeout = setTimeout(atualizar, 4200 + Math.random() * 2400);
+};
+atualizar();
+}
+
+function iniciarPiscadasAleatorias() {
+if (!ATIVAR_MOVIMENTO_CONTINUO) return;
+const piscar = () => {
+microMovimento.blinkY = 0.88; aplicarTransformMascote();
+setTimeout(() => {
+microMovimento.blinkY = 1; aplicarTransformMascote();
+blinkTimeout = setTimeout(piscar, 3000 + Math.random() * 2000);
+}, 100);
+};
+piscar();
+}
+
+function iniciarAnimacaoBoca(texto, token) {
+const frames = ['talk2.png', 'talk3.png', 'talk1.png'];
+let curr = 0;
+const avancar = () => {
+if (token !== falaTokenAtual) return;
+setMascotPose(frames[curr]);
+curr = (curr + 1) % frames.length;
+talkTimeout = setTimeout(avancar, 250 + Math.random() * 100);
+};
+avancar();
+}
+
+function pararAnimacaoFala(poseFinal = 'idle1.png') {
+clearTimeout(talkTimeout);
+talkTimeout = null;
+setMascotPose(poseFinal);
+}
+
+function selecionarVozPolia() {
+if (USAR_VOZ_PADRAO_DO_SISTEMA) {
+vozPolia = null;
+return;
+}
+
+const vozes = window.speechSynthesis.getVoices();
+if (!vozes.length) {
+vozPolia = null;
+return;
+}
+
+// Forca somente vozes pt-BR para evitar sotaque de Portugal.
+const ptBR = vozes.filter(v => {
+const lang = (v.lang || '').toLowerCase().replace('_', '-');
+const nome = (v.name || '').toLowerCase();
+return lang.startsWith('pt-br') || nome.includes('brazil');
+});
+
+if (!ptBR.length) {
+vozPolia = null;
+return;
+}
+
+const nomesFemininos = ['luciana', 'camila', 'joana', 'fernanda', 'vitoria', 'vitória', 'marisa', 'julia', 'júlia', 'marina', 'barbara', 'bárbara'];
+const preferidas = [VOZ_PREFERIDA, ...VOZ_ALTERNATIVAS].map(v => v.toLowerCase());
+
+vozPolia =
+ptBR.find(v => preferidas.some(p => (v.name || '').toLowerCase().includes(p))) ||
+ptBR.find(v => nomesFemininos.some(n => (v.name || '').toLowerCase().includes(n))) ||
+ptBR.find(v => v.default) ||
+ptBR[0];
+}
+
+function desenharTrilhasFixas() {
+trilhasSvg.innerHTML = '';
+const pares = new Set();
+Object.entries(conexoes).forEach(([origem, vizinhos]) => {
+vizinhos.forEach(destino => {
+const chave = [origem, destino].sort().join('|');
+if (pares.has(chave) || !locaisCache[origem] || !locaisCache[destino]) return;
+const p1 = percentualParaPixel(locaisCache[origem].x, locaisCache[origem].y);
+const p2 = percentualParaPixel(locaisCache[destino].x, locaisCache[destino].y);
+const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+l.setAttribute('x1', p1.x); l.setAttribute('y1', p1.y); l.setAttribute('x2', p2.x); l.setAttribute('y2', p2.y);
+l.setAttribute('class', 'linha-trilha');
+trilhasSvg.appendChild(l); pares.add(chave);
+});
+});
+}
+
+function encontrarRota(origem, destino) {
+if (origem === destino) return [origem];
+const fila = [[origem]], visitados = new Set([origem]);
+while (fila.length > 0) {
+const caminho = fila.shift(), ultimo = caminho[caminho.length - 1];
+for (const v of (conexoes[ultimo] || [])) {
+if (visitados.has(v)) continue;
+const novo = [...caminho, v];
+if (v === destino) return novo;
+visitados.add(v); fila.push(novo);
+}
+}
+return null;
+}
+
+function desenharRotaPorNos(rota) {
+if (!rota) {
+rotaPolyline.style.opacity = '0';
+return;
+}
+rotaPolyline.setAttribute('points', rota.map(id => {
+const p = percentualParaPixel(locaisCache[id].x, locaisCache[id].y);
+return `${p.x},${p.y}`;
+}).join(' '));
+rotaPolyline.style.opacity = '1';
+}
+
+async function animarAvatarNaRota(rota) {
+if (!rota) return;
+clearInterval(walkInterval);
+avatarOnMap.style.transition = `left ${TEMPO_POR_TRECHO}ms linear, top ${TEMPO_POR_TRECHO}ms linear`;
+let indoEsq = false;
+walkInterval = setInterval(() => {
+let curr = avatarOnMap.style.backgroundImage;
+if (indoEsq) avatarOnMap.style.backgroundImage = curr.includes('walk2.png') ? "url('/static/idle1.png')" : "url('/static/walk2.png')";
+else avatarOnMap.style.backgroundImage = curr.includes('walk1.png') ? "url('/static/idle1.png')" : "url('/static/walk1.png')";
+}, INTERVALO_PASSOS);
+
+for (let i = 1; i < rota.length; i++) {
+indoEsq = (locaisCache[rota[i]].x < locaisCache[rota[i-1]].x);
+avatarOnMap.style.left = locaisCache[rota[i]].x + "%";
+avatarOnMap.style.top = locaisCache[rota[i]].y + "%";
+await new Promise(r => setTimeout(r, TEMPO_POR_TRECHO));
+}
+clearInterval(walkInterval);
+avatarOnMap.style.backgroundImage = "url('/static/idle1.png')";
+}
+
+function configurarFalaAnimada(texto, poseFinal = 'idle1.png') {
+falaTokenAtual += 1;
+const meuToken = falaTokenAtual;
+
+window.speechSynthesis.cancel();
+clearTimeout(talkTimeout);
+setMascotPose('think1.png');
+
+if (audioPoliaAtual) {
+audioPoliaAtual.pause();
+audioPoliaAtual = null;
+}
+if (audioPoliaUrlAtual) {
+URL.revokeObjectURL(audioPoliaUrlAtual);
+audioPoliaUrlAtual = null;
+}
+
+const fallbackNavegador = () => {
+// Reaplica selecao no momento da fala para evitar corrida de carregamento de vozes.
+if (!vozPolia) selecionarVozPolia();
+const f = new SpeechSynthesisUtterance(texto);
+f.lang = 'pt-BR';
+f.rate = VELOCIDADE_VOZ;
+f.pitch = PITCH_VOZ;
+if (vozPolia && !USAR_VOZ_PADRAO_DO_SISTEMA) {
+f.voice = vozPolia;
+}
+f.onstart = () => {
+if (meuToken !== falaTokenAtual) return;
+atualizarBalao(texto);
+iniciarAnimacaoBoca(texto, meuToken);
+};
+f.onend = () => {
+if (meuToken !== falaTokenAtual) return;
+pararAnimacaoFala(poseFinal);
+};
+window.speechSynthesis.speak(f);
+};
+
+if (!USAR_TTS_API) {
+fallbackNavegador();
+return;
+}
+
+setTimeout(async () => {
+try {
+const res = await fetch('/api/tts', {
+method: 'POST',
+headers: {'Content-Type': 'application/json'},
+body: JSON.stringify({texto})
+});
+
+if (!res.ok || (res.headers.get('content-type') || '').includes('application/json')) {
+fallbackNavegador();
+return;
+}
+
+const blob = await res.blob();
+if (!blob || !blob.size) {
+fallbackNavegador();
+return;
+}
+
+if (meuToken !== falaTokenAtual) return;
+
+atualizarBalao(texto);
+iniciarAnimacaoBoca(texto, meuToken);
+
+audioPoliaUrlAtual = URL.createObjectURL(blob);
+audioPoliaAtual = new Audio(audioPoliaUrlAtual);
+audioPoliaAtual.onended = () => {
+if (meuToken !== falaTokenAtual) return;
+pararAnimacaoFala(poseFinal);
+if (audioPoliaUrlAtual) {
+URL.revokeObjectURL(audioPoliaUrlAtual);
+audioPoliaUrlAtual = null;
+}
+audioPoliaAtual = null;
+};
+audioPoliaAtual.onerror = () => {
+if (meuToken !== falaTokenAtual) return;
+pararAnimacaoFala(poseFinal);
+if (audioPoliaUrlAtual) {
+URL.revokeObjectURL(audioPoliaUrlAtual);
+audioPoliaUrlAtual = null;
+}
+audioPoliaAtual = null;
+fallbackNavegador();
+};
+
+try {
+await audioPoliaAtual.play();
+} catch (_) {
+if (meuToken !== falaTokenAtual) return;
+fallbackNavegador();
+}
+} catch (_) {
+if (meuToken !== falaTokenAtual) return;
+fallbackNavegador();
+}
+}, 100);
+}
+
+function apresentarPoliaAoAbrir() {
+if (poliaJaSeApresentou) return;
+poliaJaSeApresentou = true;
+
+const mensagem = "Oi! Eu sou a Polia, tua guia da POLI UPE. Me diz uma sala ou bloco e eu te levo agora.";
+atualizarBalao(mensagem);
+configurarFalaAnimada(mensagem, 'idle1.png');
+}
+
+async function moverPlayer(destino) {
+if (!locaisCache[destino]) return;
+setMascotPose('think1.png');
+const rota = encontrarRota(localAtual, destino);
+if (!rota) return;
+desenharRotaPorNos(rota);
+try {
+const res = await fetch('/api/guiar', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({destino}) });
+const data = await res.json();
+await animarAvatarNaRota(rota);
+if (data.status === "sucesso") {
+localAtual = destino;
+tituloBloco.innerText = "INFO: " + formatarNomeLocal(destino).toUpperCase();
+salasBloco.innerHTML = data.salas ? "<strong>Salas:</strong><br>" + data.salas.join("<br>") : "";
+configurarFalaAnimada(data.texto, 'idle1.png');
+}
+} catch (e) { setMascotPose('idle1.png'); }
+}
+
+async function perguntarVeterano() {
+const p = inputPergunta.value.trim(); if (!p) return;
+inputPergunta.value = ""; setMascotPose('think1.png');
+try {
+const res = await fetch('/api/chat', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({pergunta: p}) });
+const d = await res.json();
+configurarFalaAnimada(d.texto || "Não consegui pensar agora.", 'idle1.png');
+} catch (e) { setMascotPose('idle1.png'); }
+}
+
+async function carregarLocais() {
+const res = await fetch('/api/locais');
+locaisCache = await res.json();
+if (locaisCache[localAtual]) {
+avatarOnMap.style.left = locaisCache[localAtual].x + '%';
+avatarOnMap.style.top = locaisCache[localAtual].y + '%';
+}
+Object.entries(locaisCache).forEach(([id, d]) => {
+const ck = document.createElement('div'); ck.className = 'checkpoint';
+ck.style.left = d.x + '%'; ck.style.top = d.y + '%';
+const s = document.createElement('span'); s.innerText = abreviarLocal(id);
+ck.appendChild(s);
+ck.addEventListener('click', () => moverPlayer(id));
+checkpointsLayer.appendChild(ck);
+});
+desenharTrilhasFixas();
+}
+
+window.speechSynthesis.onvoiceschanged = () => {
+selecionarVozPolia();
+apresentarPoliaAoAbrir();
+};
+
+selecionarVozPolia();
+setMascotPose('idle1.png');
+if (btnBuscar) btnBuscar.addEventListener('click', perguntarVeterano);
+if (inputPergunta) {
+inputPergunta.addEventListener('keydown', (e) => {
+if (e.key === 'Enter') perguntarVeterano();
+});
+}
+
+// Mantem a Polia parada em idle; gestos aparecem apenas durante a fala.
+carregarLocais();
+setTimeout(apresentarPoliaAoAbrir, 600);
+</script>
+</body>
+</html>
