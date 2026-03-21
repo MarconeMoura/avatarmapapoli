@@ -582,11 +582,15 @@ const poliaSideMascot = document.getElementById('polia-side-mascot');
 const checkpointsLayer = document.getElementById('checkpoints-layer');
 const trilhasSvg = document.getElementById('trilhas-svg');
 const rotaPolyline = document.getElementById('rota-polyline');
+const AVATAR_MAPA_FRAMES = ['idle1.png', 'walk1.png', 'walk2.png'];
+const avatarFramesCarregados = new Set();
+let avatarFrameAtual = 'idle1.png';
 let vozPolia = null;
 let poliaJaSeApresentou = false;
 let audioPoliaAtual = null;
 let audioPoliaUrlAtual = null;
 let falaTokenAtual = 0;
+let movimentoTokenAtual = 0;
 
 const poseAjustes = {
 'idle1.png': { scale: 1.0, x: 0, y: 0 },
@@ -622,6 +626,24 @@ return m[id] || id.slice(0, 3).toUpperCase();
 function percentualParaPixel(x, y) {
 const rect = document.getElementById('game-container').getBoundingClientRect();
 return { x: (x / 100) * rect.width, y: (y / 100) * rect.height };
+}
+
+function preloadFramesAvatarMapa() {
+AVATAR_MAPA_FRAMES.forEach((frame) => {
+const img = new Image();
+img.onload = () => avatarFramesCarregados.add(frame);
+img.onerror = () => {
+// Mantem a animacao fluida mesmo se um frame falhar em producao.
+avatarFramesCarregados.add(frame);
+};
+img.src = `/static/${frame}`;
+});
+}
+
+function setFrameAvatarMapa(frame) {
+if (!avatarFramesCarregados.has(frame)) return;
+avatarFrameAtual = frame;
+avatarOnMap.style.backgroundImage = `url('/static/${frame}')`;
 }
 
 function aplicarTransformMascote() {
@@ -761,25 +783,35 @@ return `${p.x},${p.y}`;
 rotaPolyline.style.opacity = '1';
 }
 
-async function animarAvatarNaRota(rota) {
+async function animarAvatarNaRota(rota, tokenMovimento) {
 if (!rota) return;
 clearInterval(walkInterval);
 avatarOnMap.style.transition = `left ${TEMPO_POR_TRECHO}ms linear, top ${TEMPO_POR_TRECHO}ms linear`;
 let indoEsq = false;
+let alternar = false;
 walkInterval = setInterval(() => {
-let curr = avatarOnMap.style.backgroundImage;
-if (indoEsq) avatarOnMap.style.backgroundImage = curr.includes('walk2.png') ? "url('/static/idle1.png')" : "url('/static/walk2.png')";
-else avatarOnMap.style.backgroundImage = curr.includes('walk1.png') ? "url('/static/idle1.png')" : "url('/static/walk1.png')";
+if (tokenMovimento !== movimentoTokenAtual) {
+clearInterval(walkInterval);
+return;
+}
+alternar = !alternar;
+const framePasso = indoEsq ? 'walk2.png' : 'walk1.png';
+const proximoFrame = alternar ? framePasso : 'idle1.png';
+setFrameAvatarMapa(proximoFrame);
 }, INTERVALO_PASSOS);
 
 for (let i = 1; i < rota.length; i++) {
+if (tokenMovimento !== movimentoTokenAtual) {
+clearInterval(walkInterval);
+return;
+}
 indoEsq = (locaisCache[rota[i]].x < locaisCache[rota[i-1]].x);
 avatarOnMap.style.left = locaisCache[rota[i]].x + "%";
 avatarOnMap.style.top = locaisCache[rota[i]].y + "%";
 await new Promise(r => setTimeout(r, TEMPO_POR_TRECHO));
 }
 clearInterval(walkInterval);
-avatarOnMap.style.backgroundImage = "url('/static/idle1.png')";
+setFrameAvatarMapa('idle1.png');
 }
 
 function configurarFalaAnimada(texto, poseFinal = 'idle1.png') {
@@ -896,6 +928,7 @@ configurarFalaAnimada(mensagem, 'idle1.png');
 
 async function moverPlayer(destino) {
 if (!locaisCache[destino]) return;
+const meuTokenMovimento = ++movimentoTokenAtual;
 setMascotPose('think1.png');
 const rota = encontrarRota(localAtual, destino);
 if (!rota) return;
@@ -903,7 +936,9 @@ desenharRotaPorNos(rota);
 try {
 const res = await fetch('/api/guiar', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({destino}) });
 const data = await res.json();
-await animarAvatarNaRota(rota);
+if (meuTokenMovimento !== movimentoTokenAtual) return;
+await animarAvatarNaRota(rota, meuTokenMovimento);
+if (meuTokenMovimento !== movimentoTokenAtual) return;
 if (data.status === "sucesso") {
 localAtual = destino;
 tituloBloco.innerText = "INFO: " + formatarNomeLocal(destino).toUpperCase();
@@ -948,6 +983,8 @@ apresentarPoliaAoAbrir();
 
 selecionarVozPolia();
 setMascotPose('idle1.png');
+preloadFramesAvatarMapa();
+setFrameAvatarMapa('idle1.png');
 if (btnBuscar) btnBuscar.addEventListener('click', perguntarVeterano);
 if (inputPergunta) {
 inputPergunta.addEventListener('keydown', (e) => {
