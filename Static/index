@@ -206,10 +206,26 @@ background-size: contain;
 background-repeat: no-repeat;
 background-position: center;
 z-index: 8;
-transform: translate(-50%, -50%);
+transform: translate3d(-50%, -50%, 0);
 filter: drop-shadow(0 5px 10px rgba(0, 0, 0, 0.35));
 transition: left 180ms linear, top 180ms linear;
 will-change: left, top;
+backface-visibility: hidden;
+-webkit-backface-visibility: hidden;
+}
+
+#avatar-on-map.is-walking {
+animation: avatarWalkBob 380ms ease-in-out infinite;
+}
+
+@keyframes avatarWalkBob {
+0%,
+100% {
+transform: translate3d(-50%, -50%, 0);
+}
+50% {
+transform: translate3d(-50%, -54%, 0);
+}
 }
 
 .route-chip {
@@ -610,7 +626,7 @@ aplicarTransformMascote();
 
 let locaisCache = {};
 let localAtual = 'entrada';
-let walkInterval, talkTimeout, idleTimeout, blinkTimeout;
+let talkTimeout, idleTimeout, blinkTimeout;
 let basePose = { scale: 1, x: 0, y: 0 }, microMovimento = { x: 0, y: 0, rot: 0, blinkY: 1 };
 
 const conexoes = {
@@ -785,32 +801,22 @@ rotaPolyline.style.opacity = '1';
 
 async function animarAvatarNaRota(rota, tokenMovimento) {
 if (!rota) return;
-clearInterval(walkInterval);
 avatarOnMap.style.transition = `left ${TEMPO_POR_TRECHO}ms linear, top ${TEMPO_POR_TRECHO}ms linear`;
+avatarOnMap.classList.add('is-walking');
 let indoEsq = false;
-let alternar = false;
-walkInterval = setInterval(() => {
-if (tokenMovimento !== movimentoTokenAtual) {
-clearInterval(walkInterval);
-return;
-}
-alternar = !alternar;
-const framePasso = indoEsq ? 'walk2.png' : 'walk1.png';
-const proximoFrame = alternar ? framePasso : 'idle1.png';
-setFrameAvatarMapa(proximoFrame);
-}, INTERVALO_PASSOS);
 
 for (let i = 1; i < rota.length; i++) {
 if (tokenMovimento !== movimentoTokenAtual) {
-clearInterval(walkInterval);
+avatarOnMap.classList.remove('is-walking');
 return;
 }
 indoEsq = (locaisCache[rota[i]].x < locaisCache[rota[i-1]].x);
+setFrameAvatarMapa(indoEsq ? 'walk2.png' : 'walk1.png');
 avatarOnMap.style.left = locaisCache[rota[i]].x + "%";
 avatarOnMap.style.top = locaisCache[rota[i]].y + "%";
 await new Promise(r => setTimeout(r, TEMPO_POR_TRECHO));
 }
-clearInterval(walkInterval);
+avatarOnMap.classList.remove('is-walking');
 setFrameAvatarMapa('idle1.png');
 }
 
