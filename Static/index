@@ -28,8 +28,8 @@ box-sizing: border-box;
 --hero-glow-bottom-desktop: 10px;
 --hero-ring-bottom-desktop: 10px;
 /* Controle de altura do círculo atrás do avatar - MOBILE */
---hero-glow-bottom-mobile: 75px;
---hero-ring-bottom-mobile: 67px;
+--hero-glow-bottom-mobile: 10px;
+--hero-ring-bottom-mobile: 10px;
 }
 
 body {
@@ -607,6 +607,17 @@ let audioPoliaAtual = null;
 let audioPoliaUrlAtual = null;
 let falaTokenAtual = 0;
 let movimentoTokenAtual = 0;
+let falaDesbloqueadaPorGesto = false;
+let introAguardandoDesbloqueio = false;
+
+function dispositivoIOS() {
+const ua = navigator.userAgent || '';
+const plataforma = navigator.platform || '';
+const touchMac = plataforma === 'MacIntel' && navigator.maxTouchPoints > 1;
+return /iPad|iPhone|iPod/.test(ua) || touchMac;
+}
+
+const PRECISA_DESBLOQUEIO_GESTO = dispositivoIOS();
 
 const poseAjustes = {
 'idle1.png': { scale: 1.0, x: 0, y: 0 },
@@ -721,6 +732,37 @@ talkTimeout = null;
 setMascotPose(poseFinal);
 }
 
+function destravarFalaComGesto() {
+if (!PRECISA_DESBLOQUEIO_GESTO || falaDesbloqueadaPorGesto) return;
+falaDesbloqueadaPorGesto = true;
+
+try {
+const unlock = new SpeechSynthesisUtterance(' ');
+unlock.lang = 'pt-BR';
+unlock.volume = 0;
+window.speechSynthesis.speak(unlock);
+setTimeout(() => window.speechSynthesis.cancel(), 40);
+} catch (_) {
+// Se falhar, seguimos com o fluxo e tentamos novamente na proxima fala.
+}
+
+if (introAguardandoDesbloqueio && !poliaJaSeApresentou) {
+introAguardandoDesbloqueio = false;
+apresentarPoliaAoAbrir();
+}
+}
+
+function registrarDesbloqueioFala() {
+if (!PRECISA_DESBLOQUEIO_GESTO) {
+falaDesbloqueadaPorGesto = true;
+return;
+}
+
+['touchend', 'click', 'keydown'].forEach((evento) => {
+window.addEventListener(evento, destravarFalaComGesto, { passive: true });
+});
+}
+
 function selecionarVozPolia() {
 if (USAR_VOZ_PADRAO_DO_SISTEMA) {
 vozPolia = null;
@@ -821,6 +863,12 @@ setFrameAvatarMapa('idle1.png');
 }
 
 function configurarFalaAnimada(texto, poseFinal = 'idle1.png') {
+if (PRECISA_DESBLOQUEIO_GESTO && !falaDesbloqueadaPorGesto) {
+introAguardandoDesbloqueio = true;
+atualizarBalao(texto);
+return;
+}
+
 falaTokenAtual += 1;
 const meuToken = falaTokenAtual;
 
@@ -925,8 +973,14 @@ fallbackNavegador();
 
 function apresentarPoliaAoAbrir() {
 if (poliaJaSeApresentou) return;
-poliaJaSeApresentou = true;
 
+if (PRECISA_DESBLOQUEIO_GESTO && !falaDesbloqueadaPorGesto) {
+introAguardandoDesbloqueio = true;
+atualizarBalao('Toque na tela para eu ativar a voz da Polia.');
+return;
+}
+
+poliaJaSeApresentou = true;
 const mensagem = "Oi! Eu sou a Polia, tua guia da POLI UPE. Me diz uma sala ou bloco e eu te levo agora.";
 atualizarBalao(mensagem);
 configurarFalaAnimada(mensagem, 'idle1.png');
@@ -988,6 +1042,7 @@ apresentarPoliaAoAbrir();
 };
 
 selecionarVozPolia();
+registrarDesbloqueioFala();
 setMascotPose('idle1.png');
 preloadFramesAvatarMapa();
 setFrameAvatarMapa('idle1.png');
