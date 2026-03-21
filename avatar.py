@@ -17,8 +17,8 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-# Carrega variáveis de ambiente
-load_dotenv()
+# Carrega variáveis de ambiente (prioriza .env no desenvolvimento local)
+load_dotenv(override=True)
 
 app = FastAPI(title="Avatar Guia POLI UPE")
 
@@ -39,6 +39,7 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_TTS_MODEL = os.getenv("OPENAI_TTS_MODEL", "gpt-4o-mini-tts")
 OPENAI_TTS_VOICE = os.getenv("OPENAI_TTS_VOICE", "nova")
+GEMINI_TEXT_MODEL = os.getenv("GEMINI_TEXT_MODEL", "gemini-2.0-flash")
 OPENAI_TTS_INSTRUCTIONS = os.getenv(
     "OPENAI_TTS_INSTRUCTIONS",
     "Fale em portugues do Brasil, voz feminina natural, tom acolhedor e claro.",
@@ -598,7 +599,7 @@ async def inferir_destino_com_ia(pergunta: str, contexto_extra: Any = None) -> d
     )
 
     try:
-        response = genai_client.models.generate_content(model="gemini-1.5-flash", contents=prompt)
+        response = genai_client.models.generate_content(model=GEMINI_TEXT_MODEL, contents=prompt)
         bruto = (response.text or "").strip()
         data = extrair_json(bruto)
         if not isinstance(data, dict):
@@ -684,7 +685,7 @@ async def gerar_fala_com_ia(destino_id: str, dados_local: dict, contexto_extra: 
         return local.lower() in t.lower()
 
     try:
-        response = genai_client.models.generate_content(model="gemini-1.5-flash", contents=prompt)
+        response = genai_client.models.generate_content(model=GEMINI_TEXT_MODEL, contents=prompt)
         frase = (response.text or "").strip()
 
         repetida = any(frase.lower() == h.lower() for h in historico) or (
@@ -692,7 +693,7 @@ async def gerar_fala_com_ia(destino_id: str, dados_local: dict, contexto_extra: 
         )
         if repetida or not frase_valida(frase):
             response2 = genai_client.models.generate_content(
-                model="gemini-1.5-flash",
+                model=GEMINI_TEXT_MODEL,
                 contents=prompt + " Gere outra versão mais contextual, citando o bloco e um destaque real.",
             )
             frase2 = (response2.text or "").strip()
@@ -810,7 +811,7 @@ async def chat_veterano(req: RequisicaoChat) -> dict[str, Any]:
         }
 
     try:
-        response = genai_client.models.generate_content(model="gemini-1.5-flash", contents=prompt)
+        response = genai_client.models.generate_content(model=GEMINI_TEXT_MODEL, contents=prompt)
         texto = (response.text or "").strip()
         if not texto:
             texto = "Posso te ajudar com rotas por bloco e sala. Manda um local que eu te levo."
