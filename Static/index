@@ -553,76 +553,6 @@ margin-top: var(--checkpoint-font-top-mobile);
 }
 
 }
-
-.checkpoint-tuner {
-position: fixed;
-right: 10px;
-bottom: 10px;
-z-index: 30;
-display: none;
-width: min(92vw, 320px);
-background: rgba(255, 255, 255, 0.95);
-border: 2px solid #d98ab2;
-border-radius: 12px;
-box-shadow: 0 10px 20px rgba(0, 0, 0, 0.25);
-backdrop-filter: blur(4px);
-overflow: hidden;
-}
-
-.checkpoint-tuner-toggle {
-width: 100%;
-border: 0;
-background: #c94887;
-color: #fff;
-font-family: "Baloo 2", sans-serif;
-font-size: 0.95rem;
-font-weight: 800;
-padding: 9px 10px;
-cursor: pointer;
-}
-
-.checkpoint-tuner-content {
-display: none;
-padding: 8px 10px 10px;
-max-height: 48vh;
-overflow: auto;
-}
-
-.checkpoint-tuner.is-open .checkpoint-tuner-content {
-display: grid;
-gap: 7px;
-}
-
-.checkpoint-control {
-display: grid;
-gap: 3px;
-}
-
-.checkpoint-control-label {
-display: flex;
-justify-content: space-between;
-align-items: center;
-font-size: 0.77rem;
-font-weight: 800;
-color: #6b2850;
-font-family: "Nunito", sans-serif;
-}
-
-.checkpoint-control input[type="range"] {
-width: 100%;
-}
-
-.checkpoint-hint {
-font-size: 0.72rem;
-line-height: 1.25;
-color: #6c4c5c;
-}
-
-@media (max-width: 820px) {
-.checkpoint-tuner {
-display: block;
-}
-}
 </style>
 </head>
 <body>
@@ -670,11 +600,6 @@ display: block;
 </main>
 </div>
 
-<section id="checkpoint-tuner" class="checkpoint-tuner" aria-label="Ajuste de checkpoints">
-<button type="button" id="checkpoint-tuner-toggle" class="checkpoint-tuner-toggle">Ajuste Checkpoints</button>
-<div id="checkpoint-tuner-content" class="checkpoint-tuner-content"></div>
-</section>
-
 <script>
 const TEMPO_POR_TRECHO = 1400;
 const INTERVALO_PASSOS = 420;
@@ -700,9 +625,6 @@ const poliaSideMascot = document.getElementById('polia-side-mascot');
 const checkpointsLayer = document.getElementById('checkpoints-layer');
 const trilhasSvg = document.getElementById('trilhas-svg');
 const rotaPolyline = document.getElementById('rota-polyline');
-const checkpointTuner = document.getElementById('checkpoint-tuner');
-const checkpointTunerToggle = document.getElementById('checkpoint-tuner-toggle');
-const checkpointTunerContent = document.getElementById('checkpoint-tuner-content');
 const AVATAR_MAPA_FRAMES = ['idle1.png', 'walk1.png', 'walk2.png'];
 const avatarFramesCarregados = new Set();
 let avatarFrameAtual = 'idle1.png';
@@ -758,71 +680,6 @@ return m[id] || id.slice(0, 3).toUpperCase();
 function percentualParaPixel(x, y) {
 const rect = document.getElementById('game-container').getBoundingClientRect();
 return { x: (x / 100) * rect.width, y: (y / 100) * rect.height };
-}
-
-function initCheckpointTuner() {
-if (!checkpointTuner || !checkpointTunerToggle || !checkpointTunerContent) return;
-
-const controles = [
-{ varName: '--checkpoint-size-mobile', label: 'Tamanho', min: 24, max: 54, step: 1, unit: 'px' },
-{ varName: '--checkpoint-anchor-y-mobile', label: 'Ancoragem Y', min: -120, max: -70, step: 1, unit: '%' },
-{ varName: '--checkpoint-hover-anchor-y-mobile', label: 'Hover Y', min: -125, max: -70, step: 1, unit: '%' },
-{ varName: '--checkpoint-font-size-mobile', label: 'Fonte', min: 0.55, max: 1.05, step: 0.01, unit: 'rem' },
-{ varName: '--checkpoint-font-top-mobile', label: 'Texto Y', min: -4, max: 8, step: 0.2, unit: 'px' },
-];
-
-const css = getComputedStyle(document.documentElement);
-
-const criarControle = (def) => {
-const bloco = document.createElement('label');
-bloco.className = 'checkpoint-control';
-
-const titulo = document.createElement('span');
-titulo.className = 'checkpoint-control-label';
-
-const nome = document.createElement('span');
-nome.innerText = def.label;
-
-const valor = document.createElement('strong');
-
-const input = document.createElement('input');
-input.type = 'range';
-input.min = String(def.min);
-input.max = String(def.max);
-input.step = String(def.step);
-
-const bruto = (css.getPropertyValue(def.varName) || '').trim();
-const inicial = Number.parseFloat(bruto.replace(def.unit, ''));
-const valorInicial = Number.isFinite(inicial) ? inicial : def.min;
-
-input.value = String(valorInicial);
-valor.innerText = `${valorInicial}${def.unit}`;
-
-input.addEventListener('input', () => {
-const atual = Number.parseFloat(input.value);
-const valorFormatado = Number.isInteger(atual) ? String(atual) : atual.toFixed(2).replace(/\.00$/, '');
-document.documentElement.style.setProperty(def.varName, `${valorFormatado}${def.unit}`);
-valor.innerText = `${valorFormatado}${def.unit}`;
-});
-
-titulo.appendChild(nome);
-titulo.appendChild(valor);
-bloco.appendChild(titulo);
-bloco.appendChild(input);
-return bloco;
-};
-
-checkpointTunerContent.innerHTML = '';
-controles.forEach((def) => checkpointTunerContent.appendChild(criarControle(def)));
-
-const dica = document.createElement('div');
-dica.className = 'checkpoint-hint';
-dica.innerText = 'Ajuste os sliders e copie os valores finais das variaveis --checkpoint-*-mobile no :root.';
-checkpointTunerContent.appendChild(dica);
-
-checkpointTunerToggle.addEventListener('click', () => {
-checkpointTuner.classList.toggle('is-open');
-});
 }
 
 function preloadFramesAvatarMapa() {
@@ -1243,7 +1100,6 @@ if (e.key === 'Enter') perguntarVeterano();
 
 // Mantem a Polia parada em idle; gestos aparecem apenas durante a fala.
 carregarLocais();
-initCheckpointTuner();
 setTimeout(apresentarPoliaAoAbrir, 600);
 </script>
 </body>
