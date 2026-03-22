@@ -525,6 +525,17 @@ font-size: 0.94rem;
 grid-template-columns: 1fr;
 }
 
+.checkpoint {
+width: 34px;
+height: 34px;
+transform: translate(-50%, -94%);
+}
+
+.checkpoint span {
+font-size: 0.72rem;
+margin-top: 1px;
+}
+
 }
 </style>
 </head>
@@ -1008,12 +1019,26 @@ configurarFalaAnimada(data.texto, 'idle1.png');
 } catch (e) { setMascotPose('idle1.png'); }
 }
 
+function aplicarOrigemBusca(origem) {
+if (!origem || !locaisCache[origem]) return;
+localAtual = origem;
+avatarOnMap.style.left = locaisCache[origem].x + '%';
+avatarOnMap.style.top = locaisCache[origem].y + '%';
+desenharRotaPorNos(null);
+}
+
 async function perguntarVeterano() {
 const p = inputPergunta.value.trim(); if (!p) return;
 inputPergunta.value = ""; setMascotPose('think1.png');
 try {
 const res = await fetch('/api/chat', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({pergunta: p}) });
 const d = await res.json();
+if (d && d.destino) {
+if (d.origem) aplicarOrigemBusca(d.origem);
+if (d.texto) atualizarBalao(d.texto);
+await moverPlayer(d.destino);
+return;
+}
 configurarFalaAnimada(d.texto || "Não consegui pensar agora.", 'idle1.png');
 } catch (e) { setMascotPose('idle1.png'); }
 }

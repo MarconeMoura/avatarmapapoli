@@ -68,7 +68,7 @@ locais_campus = {
         "x": 22.67,
         "y": 63.62,
         "salas": ["Vagas de Carros", "Motos"],
-        "dica": "As vagas acabam rápido, então quem chega tarde sofre pra estacionar.",
+        "dica": "As vagas de carro são destinadas a servidores da Poli, apenas alunos com motos podem estacionar aqui.",
     },
     "lanchonete": {
         "x": 17.22,
@@ -508,6 +508,109 @@ def inferir_destino_por_codigo(codigo: str) -> str | None:
     return aliases_blocos.get(letra)
 
 
+def construir_aliases_locais() -> dict[str, str]:
+    aliases: dict[str, str] = {}
+
+    for destino in locais_campus.keys():
+        destino_norm = normalizar_texto(destino)
+        if destino_norm:
+            aliases[destino_norm] = destino
+
+        if destino.startswith("bloco"):
+            sufixo = destino.replace("bloco", "", 1).strip()
+            sufixo_norm = normalizar_texto(sufixo)
+            if sufixo_norm:
+                aliases[sufixo_norm] = destino
+            for parte in re.findall(r"[a-z]+", sufixo_norm):
+                if len(parte) == 1:
+                    aliases[parte] = destino
+
+    aliases.update(
+        {
+            "diretorio academico": "da",
+            "diretorio": "da",
+            "d a": "da",
+            "portao": "entrada",
+            "portao principal": "entrada",
+        }
+    )
+    return aliases
+
+
+aliases_locais = construir_aliases_locais()
+
+
+def resolver_local_por_texto(texto: str) -> str | None:
+    texto_norm = normalizar_texto(texto)
+    if not texto_norm:
+        return None
+    tokens = set(texto_norm.split())
+
+    if texto_norm in aliases_locais:
+        return aliases_locais[texto_norm]
+
+    melhor: tuple[int, str] | None = None
+    for alias, destino in aliases_locais.items():
+        if not alias:
+            continue
+
+        bate = False
+        if len(alias) == 1:
+            bate = alias in tokens
+        else:
+            bate = alias in texto_norm
+
+        if bate:
+            score = len(alias)
+            if not melhor or score > melhor[0]:
+                melhor = (score, destino)
+
+    if melhor:
+        return melhor[1]
+    return None
+
+
+def extrair_trechos_origem_destino(pergunta: str) -> tuple[str | None, str | None]:
+    pergunta_norm = normalizar_texto(pergunta)
+    if not pergunta_norm:
+        return None, None
+
+    padroes = [
+        r"\bde\s+(.+?)\s+para\s+(.+)$",
+        r"\bsaindo de\s+(.+?)\s+para\s+(.+)$",
+    ]
+    for padrao in padroes:
+        m = re.search(padrao, pergunta_norm)
+        if m:
+            origem = (m.group(1) or "").strip()
+            destino = (m.group(2) or "").strip()
+            if origem and destino:
+                return origem, destino
+    return None, None
+
+
+async def resolver_destino_consulta(
+    consulta: str,
+    contexto_extra: Any = None,
+    permitir_ia: bool = True,
+) -> str | None:
+    local_direto = resolver_local_por_texto(consulta)
+    if local_direto:
+        return local_direto
+
+    busca = buscar_destino_por_sala(consulta)
+    if busca:
+        return busca["destino"]
+
+    if not permitir_ia:
+        return None
+
+    inferencia_ia = await inferir_destino_com_ia(consulta, contexto_extra=contexto_extra)
+    if inferencia_ia:
+        return inferencia_ia["destino"]
+    return None
+
+
 def buscar_destino_por_sala(pergunta: str) -> dict[str, str] | None:
     pergunta_norm = normalizar_texto(pergunta)
 
@@ -774,6 +877,31 @@ async def guiar_usuario(req: RequisicaoLocal) -> dict[str, Any]:
 
 @app.post("/api/chat")
 async def chat_veterano(req: RequisicaoChat) -> dict[str, Any]:
+    origem_txt, destino_txt = extrair_trechos_origem_destino(req.pergunta)
+    if origem_txt and destino_txt:
+        origem_resolvida = await resolver_destino_consulta(
+            origem_txt,
+            contexto_extra=req.contexto_extra,
+            permitir_ia=False,
+        )
+        destino_resolvido = await resolver_destino_consulta(
+            destino_txt,
+            contexto_extra=req.contexto_extra,
+            permitir_ia=True,
+        )
+
+        if destino_resolvido:
+            origem_final = origem_resolvida or "entrada"
+            nome_origem = origem_final.upper()
+            nome_destino = destino_resolvido.upper()
+            return {
+                "status": "sucesso",
+                "tipo": "rota_referenciada",
+                "origem": origem_final,
+                "destino": destino_resolvido,
+                "texto": f"Perfeito. Vou sair de {nome_origem} e te levar ate {nome_destino}.",
+            }
+
     busca = buscar_destino_por_sala(req.pergunta)
     if busca:
         destino = busca["destino"]

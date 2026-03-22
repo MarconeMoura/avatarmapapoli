@@ -6,6 +6,7 @@ __pycache__/
 .env
 .api.log
 .api.pid
+.api*.pid
 .backups/
 .DS_Store
 .vscode/
