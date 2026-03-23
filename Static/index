@@ -728,12 +728,89 @@ idsOrdenados.push(id);
 return idsOrdenados;
 }
 
+function construirMapaPrefixosBloco() {
+const mapa = {};
+Object.keys(locaisCache).forEach((id) => {
+const nome = normalizarTexto(id);
+if (!nome.startsWith('bloco ')) return;
+
+const sufixo = nome.replace('bloco ', '').trim();
+const partes = sufixo.split('/').map((p) => p.trim()).filter(Boolean);
+partes.forEach((parte) => {
+const letra = (parte || '')[0];
+if (letra && /[a-z]/.test(letra)) {
+mapa[letra] = id;
+}
+});
+});
+return mapa;
+}
+
+function extrairLocaisPorSala(texto) {
+const textoNorm = normalizarTexto(texto);
+if (!textoNorm) return [];
+
+const mapaPrefixos = construirMapaPrefixosBloco();
+const encontrados = [];
+const regex = /\b([a-z]{1,4})\s*-?\s*(\d{1,3})\b/g;
+let match;
+
+while ((match = regex.exec(textoNorm)) !== null) {
+const prefixo = (match[1] || '').toLowerCase();
+const chave = prefixo[0];
+const localId = mapaPrefixos[chave];
+if (!localId) continue;
+
+encontrados.push({
+id: localId,
+idx: match.index,
+score: prefixo === chave ? 2 : 1,
+});
+}
+
+if (!encontrados.length) return [];
+
+encontrados.sort((a, b) => {
+if (a.idx !== b.idx) return a.idx - b.idx;
+return b.score - a.score;
+});
+
+const ordenados = [];
+const vistos = new Set();
+encontrados.forEach(({ id }) => {
+if (vistos.has(id)) return;
+vistos.add(id);
+ordenados.push(id);
+});
+
+return ordenados;
+}
+
+function extrairReferenciasOrdenadas(texto) {
+const locaisTexto = extrairLocaisMencionados(texto);
+const locaisSala = extrairLocaisPorSala(texto);
+
+const unificados = [];
+const vistos = new Set();
+for (const id of [...locaisTexto, ...locaisSala]) {
+if (vistos.has(id)) continue;
+vistos.add(id);
+unificados.push(id);
+}
+return unificados;
+}
+
 function interpretarComandoRota(pergunta) {
 const textoNorm = normalizarTexto(pergunta);
-const locais = extrairLocaisMencionados(pergunta);
+const locais = extrairReferenciasOrdenadas(pergunta);
 if (!locais.length) return null;
 
 const temIndicadorOrigem = /(\b(estou|to|saindo|partindo|vindo)\b)/.test(textoNorm);
+const temIndicadorDestino = /(\b(quero|preciso|vou|ir|indo|destino|ate|até|para|pra|pro)\b)/.test(textoNorm);
+
+if (locais.length >= 2 && (temIndicadorOrigem || temIndicadorDestino)) {
+return { origem: locais[0], destino: locais[locais.length - 1] };
+}
 
 if (temIndicadorOrigem) {
 return { origem: locais[0] };
@@ -1092,6 +1169,14 @@ inputPergunta.value = ""; setMascotPose('think1.png');
 const declaracaoLocalizacao = ehDeclaracaoLocalizacao(p);
 
 const comandoRota = interpretarComandoRota(p);
+if (comandoRota?.origem && comandoRota?.destino) {
+const ok = definirLocalAtual(comandoRota.origem, true);
+if (ok) {
+await moverPlayer(comandoRota.destino);
+return;
+}
+}
+
 if (comandoRota?.origem) {
 const ok = definirLocalAtual(comandoRota.origem, true);
 if (ok) {
