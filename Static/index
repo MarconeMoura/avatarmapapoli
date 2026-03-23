@@ -746,6 +746,12 @@ return { origem: locais[0] };
 return null;
 }
 
+function ehDeclaracaoLocalizacao(pergunta) {
+const textoNorm = normalizarTexto(pergunta);
+if (!textoNorm) return false;
+return /(\b(estou|to|tô|estamos|me encontro|me localizo|fica onde eu estou|minha localizacao|minha localizacao atual|estou na sala|estou no bloco|estou na)\b)/.test(textoNorm);
+}
+
 function definirLocalAtual(destinoId, atualizarInfo = true) {
 if (!locaisCache[destinoId]) return false;
 
@@ -1083,6 +1089,7 @@ configurarFalaAnimada(data.texto, 'idle1.png');
 async function perguntarVeterano() {
 const p = inputPergunta.value.trim(); if (!p) return;
 inputPergunta.value = ""; setMascotPose('think1.png');
+const declaracaoLocalizacao = ehDeclaracaoLocalizacao(p);
 
 const comandoRota = interpretarComandoRota(p);
 if (comandoRota?.origem) {
@@ -1098,6 +1105,13 @@ try {
 const res = await fetch('/api/chat', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({pergunta: p}) });
 const d = await res.json();
 if (d?.destino && locaisCache[d.destino]) {
+if (declaracaoLocalizacao) {
+definirLocalAtual(d.destino, true);
+const nomeOrigem = formatarNomeLocal(d.destino).toUpperCase();
+const msgOrigem = d.texto || `Perfeito! Agora considero que você está em ${nomeOrigem}.`;
+configurarFalaAnimada(`${msgOrigem} Agora escolhe o destino clicando no mapa.`, 'idle1.png');
+return;
+}
 const nome = formatarNomeLocal(d.destino).toUpperCase();
 const resposta = d.texto || `Entendi! Seu destino é ${nome}.`;
 configurarFalaAnimada(`${resposta} Para ir, clica no bloco no mapa.`, 'idle1.png');
