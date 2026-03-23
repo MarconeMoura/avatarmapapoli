@@ -28,20 +28,8 @@ box-sizing: border-box;
 --hero-glow-bottom-desktop: 10px;
 --hero-ring-bottom-desktop: 10px;
 /* Controle de altura do círculo atrás do avatar - MOBILE */
---hero-glow-bottom-mobile: 10px;
---hero-ring-bottom-mobile: 10px;
-/* Controles dos checkpoints - DESKTOP */
---checkpoint-size-desktop: 46px;
---checkpoint-anchor-y-desktop: -100%;
---checkpoint-hover-anchor-y-desktop: -102%;
---checkpoint-font-size-desktop: 0.9rem;
---checkpoint-font-top-desktop: 2px;
-/* Controles dos checkpoints - MOBILE */
---checkpoint-size-mobile: 34px;
---checkpoint-anchor-y-mobile: -94%;
---checkpoint-hover-anchor-y-mobile: -96%;
---checkpoint-font-size-mobile: 0.72rem;
---checkpoint-font-top-mobile: 1px;
+--hero-glow-bottom-mobile: 75px;
+--hero-ring-bottom-mobile: 67px;
 }
 
 body {
@@ -170,9 +158,9 @@ z-index: 6;
 
 .checkpoint {
 position: absolute;
-width: var(--checkpoint-size-desktop);
-height: var(--checkpoint-size-desktop);
-transform: translate(-50%, var(--checkpoint-anchor-y-desktop));
+width: 46px;
+height: 46px;
+transform: translate(-50%, -100%);
 border-radius: 50% 50% 50% 0;
 rotate: -45deg;
 cursor: pointer;
@@ -187,16 +175,16 @@ animation: checkpointFloat 1.8s ease-in-out infinite;
 }
 
 .checkpoint:hover {
-transform: translate(-50%, var(--checkpoint-hover-anchor-y-desktop)) scale(1.08);
+transform: translate(-50%, -102%) scale(1.08);
 }
 
 .checkpoint span {
 rotate: 45deg;
 color: #0f4f70;
 font-family: "Baloo 2", sans-serif;
-font-size: var(--checkpoint-font-size-desktop);
+font-size: 0.9rem;
 font-weight: 800;
-margin-top: var(--checkpoint-font-top-desktop);
+margin-top: 2px;
 }
 
 @keyframes checkpointFloat {
@@ -419,6 +407,13 @@ grid-template-columns: 1fr auto;
 gap: 8px;
 }
 
+.search-help {
+margin-top: 8px;
+font-size: 0.82rem;
+line-height: 1.2;
+opacity: 0.92;
+}
+
 .hero-search-card input {
 min-width: 0;
 height: 44px;
@@ -537,21 +532,6 @@ font-size: 0.94rem;
 grid-template-columns: 1fr;
 }
 
-.checkpoint {
-width: var(--checkpoint-size-mobile);
-height: var(--checkpoint-size-mobile);
-transform: translate(-50%, var(--checkpoint-anchor-y-mobile));
-}
-
-.checkpoint:hover {
-transform: translate(-50%, var(--checkpoint-hover-anchor-y-mobile)) scale(1.08);
-}
-
-.checkpoint span {
-font-size: var(--checkpoint-font-size-mobile);
-margin-top: var(--checkpoint-font-top-mobile);
-}
-
 }
 </style>
 </head>
@@ -578,6 +558,7 @@ margin-top: var(--checkpoint-font-top-mobile);
 <input type="text" id="input-pergunta" placeholder="Ex: K06, B01, Biblioteca" />
 <button id="btn-buscar" type="button">BUSCAR</button>
 </div>
+<div class="search-help">Opcional: diga onde está. Ex.: estou no bloco H. O destino você escolhe clicando no mapa.</div>
 <div class="details-strip">
 <h2 id="titulo-bloco">INFO: ENTRADA</h2>
 <div id="salas-bloco">Clique num bloco para ver as salas.</div>
@@ -634,17 +615,6 @@ let audioPoliaAtual = null;
 let audioPoliaUrlAtual = null;
 let falaTokenAtual = 0;
 let movimentoTokenAtual = 0;
-let falaDesbloqueadaPorGesto = false;
-let introAguardandoDesbloqueio = false;
-
-function dispositivoIOS() {
-const ua = navigator.userAgent || '';
-const plataforma = navigator.platform || '';
-const touchMac = plataforma === 'MacIntel' && navigator.maxTouchPoints > 1;
-return /iPad|iPhone|iPod/.test(ua) || touchMac;
-}
-
-const PRECISA_DESBLOQUEIO_GESTO = dispositivoIOS();
 
 const poseAjustes = {
 'idle1.png': { scale: 1.0, x: 0, y: 0 },
@@ -664,6 +634,7 @@ aplicarTransformMascote();
 
 let locaisCache = {};
 let localAtual = 'entrada';
+let aliasesLocais = [];
 let talkTimeout, idleTimeout, blinkTimeout;
 let basePose = { scale: 1, x: 0, y: 0 }, microMovimento = { x: 0, y: 0, rot: 0, blinkY: 1 };
 
@@ -675,6 +646,123 @@ function formatarNomeLocal(id) { return id.replace(/\b\w/g, l => l.toUpperCase()
 function abreviarLocal(id) {
 const m = { "entrada": "IN", "estacionamento": "EST", "lanchonete": "LAN", "bloco a": "A", "bloco h": "H", "bloco g": "G", "bloco f": "F", "bloco b": "B", "da": "DA", "bloco i/k": "I/K", "bloco e": "E", "bloco d": "D", "bloco j": "J", "bloco c": "C" };
 return m[id] || id.slice(0, 3).toUpperCase();
+}
+
+function normalizarTexto(texto) {
+return (texto || '')
+.normalize('NFD')
+.replace(/[\u0300-\u036f]/g, '')
+.toLowerCase()
+.replace(/[^a-z0-9\s/]/g, ' ')
+.replace(/\s+/g, ' ')
+.trim();
+}
+
+function escaparRegExp(texto) {
+return texto.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function construirAliasesLocais() {
+const aliases = [];
+Object.keys(locaisCache).forEach((id) => {
+const idNorm = normalizarTexto(id);
+const opcoes = new Set([idNorm]);
+
+if (idNorm.startsWith('bloco ')) {
+const sufixo = idNorm.replace('bloco ', '').trim();
+opcoes.add(`bloco ${sufixo}`);
+if (sufixo === 'i/k') {
+opcoes.add('bloco i');
+opcoes.add('bloco k');
+opcoes.add('ik');
+opcoes.add('i k');
+}
+}
+
+if (idNorm === 'entrada') {
+opcoes.add('portao');
+opcoes.add('portao principal');
+opcoes.add('acesso principal');
+opcoes.add('inicio');
+}
+
+if (idNorm === 'da') {
+opcoes.add('diretorio academico');
+opcoes.add('diretorio');
+}
+
+opcoes.forEach((alias) => {
+if (!alias || alias.length < 2) return;
+aliases.push({ alias, id });
+});
+});
+
+aliases.sort((a, b) => b.alias.length - a.alias.length);
+return aliases;
+}
+
+function extrairLocaisMencionados(texto) {
+const textoNorm = normalizarTexto(texto);
+if (!textoNorm) return [];
+
+const encontrados = [];
+const jaAdicionados = new Set();
+
+aliasesLocais.forEach(({ alias, id }) => {
+const regex = new RegExp(`(^|\\s)${escaparRegExp(alias)}(?=\\s|$)`, 'g');
+let match;
+while ((match = regex.exec(textoNorm)) !== null) {
+encontrados.push({ id, idx: match.index + (match[1] ? match[1].length : 0) });
+}
+});
+
+encontrados.sort((a, b) => a.idx - b.idx);
+
+const idsOrdenados = [];
+encontrados.forEach(({ id }) => {
+if (jaAdicionados.has(id)) return;
+jaAdicionados.add(id);
+idsOrdenados.push(id);
+});
+
+return idsOrdenados;
+}
+
+function interpretarComandoRota(pergunta) {
+const textoNorm = normalizarTexto(pergunta);
+const locais = extrairLocaisMencionados(pergunta);
+if (!locais.length) return null;
+
+const temIndicadorOrigem = /(\b(estou|to|saindo|partindo|vindo)\b)/.test(textoNorm);
+
+if (temIndicadorOrigem) {
+return { origem: locais[0] };
+}
+
+if (locais.length === 1) {
+return { origem: locais[0] };
+}
+
+return null;
+}
+
+function definirLocalAtual(destinoId, atualizarInfo = true) {
+if (!locaisCache[destinoId]) return false;
+
+localAtual = destinoId;
+avatarOnMap.classList.remove('is-walking');
+setFrameAvatarMapa('idle1.png');
+avatarOnMap.style.left = locaisCache[destinoId].x + '%';
+avatarOnMap.style.top = locaisCache[destinoId].y + '%';
+desenharRotaPorNos(null);
+
+if (atualizarInfo) {
+tituloBloco.innerText = 'INFO: ' + formatarNomeLocal(destinoId).toUpperCase();
+const salas = locaisCache[destinoId].salas || [];
+salasBloco.innerHTML = salas.length ? '<strong>Salas:</strong><br>' + salas.join('<br>') : '';
+}
+
+return true;
 }
 
 function percentualParaPixel(x, y) {
@@ -757,37 +845,6 @@ function pararAnimacaoFala(poseFinal = 'idle1.png') {
 clearTimeout(talkTimeout);
 talkTimeout = null;
 setMascotPose(poseFinal);
-}
-
-function destravarFalaComGesto() {
-if (!PRECISA_DESBLOQUEIO_GESTO || falaDesbloqueadaPorGesto) return;
-falaDesbloqueadaPorGesto = true;
-
-try {
-const unlock = new SpeechSynthesisUtterance(' ');
-unlock.lang = 'pt-BR';
-unlock.volume = 0;
-window.speechSynthesis.speak(unlock);
-setTimeout(() => window.speechSynthesis.cancel(), 40);
-} catch (_) {
-// Se falhar, seguimos com o fluxo e tentamos novamente na proxima fala.
-}
-
-if (introAguardandoDesbloqueio && !poliaJaSeApresentou) {
-introAguardandoDesbloqueio = false;
-apresentarPoliaAoAbrir();
-}
-}
-
-function registrarDesbloqueioFala() {
-if (!PRECISA_DESBLOQUEIO_GESTO) {
-falaDesbloqueadaPorGesto = true;
-return;
-}
-
-['touchend', 'click', 'keydown'].forEach((evento) => {
-window.addEventListener(evento, destravarFalaComGesto, { passive: true });
-});
 }
 
 function selecionarVozPolia() {
@@ -889,23 +946,13 @@ avatarOnMap.classList.remove('is-walking');
 setFrameAvatarMapa('idle1.png');
 }
 
-function configurarFalaAnimada(texto, poseFinal = 'idle1.png', opcoes = {}) {
-if (PRECISA_DESBLOQUEIO_GESTO && !falaDesbloqueadaPorGesto) {
-introAguardandoDesbloqueio = true;
-atualizarBalao(texto);
-return;
-}
-
-const usarPosePensando = opcoes.usarPosePensando !== false;
-
+function configurarFalaAnimada(texto, poseFinal = 'idle1.png') {
 falaTokenAtual += 1;
 const meuToken = falaTokenAtual;
 
 window.speechSynthesis.cancel();
 clearTimeout(talkTimeout);
-if (usarPosePensando) {
 setMascotPose('think1.png');
-}
 
 if (audioPoliaAtual) {
 audioPoliaAtual.pause();
@@ -1004,17 +1051,11 @@ fallbackNavegador();
 
 function apresentarPoliaAoAbrir() {
 if (poliaJaSeApresentou) return;
-
-if (PRECISA_DESBLOQUEIO_GESTO && !falaDesbloqueadaPorGesto) {
-introAguardandoDesbloqueio = true;
-atualizarBalao('Toque na tela para eu ativar a voz da Polia.');
-return;
-}
-
 poliaJaSeApresentou = true;
+
 const mensagem = "Oi! Eu sou a Polia, tua guia da POLI UPE. Me diz uma sala ou bloco e eu te levo agora.";
 atualizarBalao(mensagem);
-configurarFalaAnimada(mensagem, 'idle1.png', { usarPosePensando: false });
+configurarFalaAnimada(mensagem, 'idle1.png');
 }
 
 async function moverPlayer(destino) {
@@ -1039,24 +1080,27 @@ configurarFalaAnimada(data.texto, 'idle1.png');
 } catch (e) { setMascotPose('idle1.png'); }
 }
 
-function aplicarOrigemBusca(origem) {
-if (!origem || !locaisCache[origem]) return;
-localAtual = origem;
-avatarOnMap.style.left = locaisCache[origem].x + '%';
-avatarOnMap.style.top = locaisCache[origem].y + '%';
-desenharRotaPorNos(null);
-}
-
 async function perguntarVeterano() {
 const p = inputPergunta.value.trim(); if (!p) return;
 inputPergunta.value = ""; setMascotPose('think1.png');
+
+const comandoRota = interpretarComandoRota(p);
+if (comandoRota?.origem) {
+const ok = definirLocalAtual(comandoRota.origem, true);
+if (ok) {
+const msg = `Perfeito! Agora vou considerar que você está em ${formatarNomeLocal(comandoRota.origem)}.`;
+configurarFalaAnimada(msg, 'idle1.png');
+return;
+}
+}
+
 try {
 const res = await fetch('/api/chat', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({pergunta: p}) });
 const d = await res.json();
-if (d && d.destino) {
-if (d.origem) aplicarOrigemBusca(d.origem);
-if (d.texto) atualizarBalao(d.texto);
-await moverPlayer(d.destino);
+if (d?.destino && locaisCache[d.destino]) {
+const nome = formatarNomeLocal(d.destino).toUpperCase();
+const resposta = d.texto || `Entendi! Seu destino é ${nome}.`;
+configurarFalaAnimada(`${resposta} Para ir, clica no bloco no mapa.`, 'idle1.png');
 return;
 }
 configurarFalaAnimada(d.texto || "Não consegui pensar agora.", 'idle1.png');
@@ -1066,10 +1110,8 @@ configurarFalaAnimada(d.texto || "Não consegui pensar agora.", 'idle1.png');
 async function carregarLocais() {
 const res = await fetch('/api/locais');
 locaisCache = await res.json();
-if (locaisCache[localAtual]) {
-avatarOnMap.style.left = locaisCache[localAtual].x + '%';
-avatarOnMap.style.top = locaisCache[localAtual].y + '%';
-}
+aliasesLocais = construirAliasesLocais();
+definirLocalAtual('entrada', true);
 Object.entries(locaisCache).forEach(([id, d]) => {
 const ck = document.createElement('div'); ck.className = 'checkpoint';
 ck.style.left = d.x + '%'; ck.style.top = d.y + '%';
@@ -1087,7 +1129,6 @@ apresentarPoliaAoAbrir();
 };
 
 selecionarVozPolia();
-registrarDesbloqueioFala();
 setMascotPose('idle1.png');
 preloadFramesAvatarMapa();
 setFrameAvatarMapa('idle1.png');
